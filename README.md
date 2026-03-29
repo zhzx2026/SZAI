@@ -133,6 +133,54 @@ KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python3 scripts/generate.py --checkp
 - `rejected-repos.json`：哪些候选被过滤掉以及原因
 - `corpus-summary.json`：语料大小和提取统计
 
+## macOS 应用
+
+如果你想在 Mac 上直接点开一个本地程序来测试模型，现在仓库里已经有两个入口：
+
+- `SZ-AI-Mac.command`
+- `./.github/workflows/build-sz-ai-mac-app.yml`
+
+先说清楚一点：macOS 不是 Windows，所以最终产物不会是 `.exe`，而是 `.app`。使用体验上就是双击打开。
+
+### 直接在本机双击运行
+
+先安装依赖：
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+然后双击仓库根目录里的 `SZ-AI-Mac.command`，会打开一个图形界面。你可以：
+
+- 选择 `model.pt`
+- 填 prompt
+- 调整 `max_new_tokens`、`temperature`、`top_k`
+- 点击 `Generate`
+
+### 打包成真正的 `.app`
+
+如果你想要一个更像发布版本的 Mac 应用，可以本地执行：
+
+```bash
+bash scripts/build_macos_app.sh
+```
+
+它会输出：
+
+- `dist/SZ-AI-Mac.app`
+- `dist/SZ-AI-Mac.zip`
+
+### 用 GitHub Actions 构建 Mac 应用
+
+如果你不想在本机装打包工具，可以在 GitHub 上运行工作流：
+
+1. 打开仓库的 `Actions`
+2. 选择 `Build SZ-AI Mac App`
+3. 点击 `Run workflow`
+4. 等待 artifact `sz-ai-mac-app`
+
+下载后你会拿到已经打好的 `.app` 和 `.zip`。
+
 ## Self-hosted GPU 示例
 
 如果你已经有自建 Runner，可以在运行工作流时把 `runner_labels` 改成：

@@ -1,0 +1,41 @@
+name: Build SZ-AI Mac App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 120
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-macos-app-${{ hashFiles('requirements.txt', 'requirements-macos-app.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-macos-app-
+
+      - name: Build macOS app
+        run: |
+          bash scripts/build_macos_app.sh
+
+      - name: Upload macOS app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sz-ai-mac-app
+          path: |
+            dist/SZ-AI-Mac.app
+            dist/SZ-AI-Mac.zip
+          if-no-files-found: error
