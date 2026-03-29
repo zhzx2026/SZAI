@@ -1,0 +1,103 @@
+name: Train SZ-AI-Code-R1-V1
+
+on:
+  workflow_dispatch:
+    inputs:
+      languages:
+        description: "Comma-separated languages to search for top repositories."
+        required: false
+        default: "Python,TypeScript,JavaScript,Go,Rust"
+      repo_limit:
+        description: "Maximum repositories used in the corpus."
+        required: false
+        default: "6"
+      per_language_limit:
+        description: "Maximum repositories per language."
+        required: false
+        default: "2"
+      min_stars:
+        description: "Minimum repository stars."
+        required: false
+        default: "50000"
+      epochs:
+        description: "Training epochs."
+        required: false
+        default: "2"
+      batch_size:
+        description: "Mini-batch size."
+        required: false
+        default: "16"
+      sample_prompt:
+        description: "Prompt used to build code sample output."
+        required: false
+        default: "def solve("
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build code corpus from top-starred repositories
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/build_code_corpus.py \
+            --output-dir build/code-corpus \
+            --languages "${{ inputs.languages }}" \
+            --repo-limit "${{ inputs.repo_limit }}" \
+            --per-language-limit "${{ inputs.per_language_limit }}" \
+            --min-stars "${{ inputs.min_stars }}"
+
+      - name: Train code assistant model
+        run: |
+          python scripts/train.py \
+            --config configs/sz-ai-code-r1-v1.json \
+            --dataset build/code-corpus/train.txt \
+            --output-dir artifacts/SZ-AI-Code-R1-V1 \
+            --epochs "${{ inputs.epochs }}" \
+            --batch-size "${{ inputs.batch_size }}" \
+            --sample-prompt "${{ inputs.sample_prompt }}"
+
+      - name: Generate code sample
+        run: |
+          python scripts/generate.py \
+            --checkpoint artifacts/SZ-AI-Code-R1-V1/model.pt \
+            --prompt "${{ inputs.sample_prompt }}" \
+            --max-new-tokens 160 > artifacts/SZ-AI-Code-R1-V1/generated.txt
+
+      - name: Include corpus metadata in artifacts
+        run: |
+          cp build/code-corpus/summary.json artifacts/SZ-AI-Code-R1-V1/corpus-summary.json
+          cp build/code-corpus/selected-repos.json artifacts/SZ-AI-Code-R1-V1/selected-repos.json
+          cp build/code-corpus/rejected-repos.json artifacts/SZ-AI-Code-R1-V1/rejected-repos.json
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sz-ai-code-r1-v1-model
+          path: artifacts/SZ-AI-Code-R1-V1
+          if-no-files-found: error

@@ -92,6 +92,47 @@ KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python3 scripts/generate.py --checkp
 
 训练完成后，你可以在 Actions 的 Artifacts 中下载模型产物。
 
+## 代码助手版本
+
+如果你的目标是做一个偏代码方向的 `SZ-AI`，更现实的路线不是硬追 DeepSeek 规模，而是：
+
+- 只学习热门开源代码仓库
+- 自动过滤许可证和非代码仓库
+- 自动跳过 `awesome-*`、curated list 这类清单仓库
+- 只提取代码文件，不把整个 GitHub 生吞进训练集
+- 控制语料总量，让免费 GitHub Hosted Runner 也能训完
+
+对应工作流是 `./.github/workflows/train-sz-ai-code-r1-v1.yml`。
+
+它会做三件事：
+
+1. 从 GitHub 实时搜索高 star 开源代码仓库
+2. 浅克隆并提取代码文件，生成 `build/code-corpus/train.txt`
+3. 训练一个代码方向的小型 `SZ-AI-Code-R1/V1`
+
+默认参数偏保守：
+
+- 语言：`Python,TypeScript,JavaScript,Go,Rust`
+- 总仓库数：`6`
+- 每种语言最多：`2`
+- 最低 star：`50000`
+- 许可证白名单：`MIT, Apache-2.0, BSD-3-Clause, BSD-2-Clause, ISC, MPL-2.0`
+
+这样做不是因为技术上不能更多，而是因为免费 Action 的 CPU、磁盘、时长都有限。先做小而稳，才有可重复性。
+
+如果你要手动运行这个代码助手训练：
+
+1. 打开仓库的 `Actions`
+2. 选择 `Train SZ-AI-Code-R1-V1`
+3. 点击 `Run workflow`
+4. 按需调大 `repo_limit`、`per_language_limit` 或 `epochs`
+
+这条工作流的 artifact 会额外包含：
+
+- `selected-repos.json`：本次真正使用了哪些仓库
+- `rejected-repos.json`：哪些候选被过滤掉以及原因
+- `corpus-summary.json`：语料大小和提取统计
+
 ## Self-hosted GPU 示例
 
 如果你已经有自建 Runner，可以在运行工作流时把 `runner_labels` 改成：
