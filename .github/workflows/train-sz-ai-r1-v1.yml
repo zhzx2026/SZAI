@@ -1,0 +1,84 @@
+name: Train SZ-AI-R1-V1
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_labels:
+        description: 'Runner labels as JSON array. Example: ["ubuntu-latest"] or ["self-hosted","linux","gpu"].'
+        required: false
+        default: '["ubuntu-latest"]'
+      dataset_path:
+        description: "Training corpus path relative to the repository."
+        required: false
+        default: "data/train.txt"
+      output_dir:
+        description: "Directory used for model artifacts."
+        required: false
+        default: "artifacts/SZ-AI-R1-V1"
+      artifact_name:
+        description: "Uploaded GitHub Actions artifact name."
+        required: false
+        default: "sz-ai-r1-v1-model"
+      epochs:
+        description: "Number of training epochs."
+        required: false
+        default: "8"
+      batch_size:
+        description: "Mini-batch size."
+        required: false
+        default: "32"
+      sample_prompt:
+        description: "Prompt used to build sample.txt after training."
+        required: false
+        default: "SZ-AI: "
+
+jobs:
+  train:
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Train model
+        run: |
+          python scripts/train.py \
+            --config configs/sz-ai-r1-v1.json \
+            --dataset "${{ inputs.dataset_path }}" \
+            --output-dir "${{ inputs.output_dir }}" \
+            --epochs "${{ inputs.epochs }}" \
+            --batch-size "${{ inputs.batch_size }}" \
+            --sample-prompt "${{ inputs.sample_prompt }}"
+
+      - name: Generate extra sample
+        run: |
+          python scripts/generate.py \
+            --checkpoint "${{ inputs.output_dir }}/model.pt" \
+            --prompt "${{ inputs.sample_prompt }}" \
+            --max-new-tokens 120 > "${{ inputs.output_dir }}/generated.txt"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.output_dir }}
+          if-no-files-found: error

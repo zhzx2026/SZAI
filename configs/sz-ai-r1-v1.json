@@ -1,0 +1,30 @@
+{
+  "name": "SZ-AI-R1/V1",
+  "seed": 42,
+  "dataset": {
+    "path": "data/train.txt",
+    "encoding": "utf-8",
+    "seq_len": 96,
+    "stride": 4,
+    "val_ratio": 0.1
+  },
+  "model": {
+    "embedding_dim": 128,
+    "hidden_size": 256,
+    "num_layers": 2,
+    "dropout": 0.1
+  },
+  "training": {
+    "batch_size": 32,
+    "epochs": 8,
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "grad_clip": 1.0
+  },
+  "generation": {
+    "sample_prompt": "SZ-AI: ",
+    "temperature": 0.9,
+    "top_k": 16,
+    "max_new_tokens": 160
+  }
+}
