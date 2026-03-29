@@ -6,23 +6,35 @@ on:
       languages:
         description: "Comma-separated languages to search for top repositories."
         required: false
-        default: "Python,TypeScript,JavaScript,Go,Rust"
+        default: "C++,Python,Java"
       repo_limit:
         description: "Maximum repositories used in the corpus."
         required: false
-        default: "6"
+        default: "18"
       per_language_limit:
         description: "Maximum repositories per language."
         required: false
-        default: "2"
+        default: "6"
       min_stars:
         description: "Minimum repository stars."
         required: false
-        default: "50000"
+        default: "10000"
+      max_files_per_repo:
+        description: "Maximum extracted files per repository."
+        required: false
+        default: "40"
+      max_total_files:
+        description: "Maximum extracted files overall."
+        required: false
+        default: "480"
+      max_total_bytes:
+        description: "Maximum total corpus size in bytes."
+        required: false
+        default: "1800000"
       epochs:
         description: "Training epochs."
         required: false
-        default: "2"
+        default: "4"
       batch_size:
         description: "Mini-batch size."
         required: false
@@ -30,7 +42,7 @@ on:
       sample_prompt:
         description: "Prompt used to build code sample output."
         required: false
-        default: "def solve("
+        default: "class Solution {"
 
 jobs:
   train:
@@ -70,7 +82,11 @@ jobs:
             --languages "${{ inputs.languages }}" \
             --repo-limit "${{ inputs.repo_limit }}" \
             --per-language-limit "${{ inputs.per_language_limit }}" \
-            --min-stars "${{ inputs.min_stars }}"
+            --min-stars "${{ inputs.min_stars }}" \
+            --max-files-per-repo "${{ inputs.max_files_per_repo }}" \
+            --max-total-files "${{ inputs.max_total_files }}" \
+            --max-total-bytes "${{ inputs.max_total_bytes }}" \
+            --strict-language-files
 
       - name: Train code assistant model
         run: |

@@ -13,7 +13,7 @@ from typing import Dict, Iterable, List
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-DEFAULT_LANGUAGES = ["Python", "TypeScript", "JavaScript", "Go", "Rust"]
+DEFAULT_LANGUAGES = ["C++", "Python", "Java"]
 DEFAULT_LICENSES = [
     "MIT",
     "Apache-2.0",
@@ -33,6 +33,32 @@ CURATION_MARKERS = {
     "tutorial",
     "university",
 }
+LANGUAGE_ALIASES = {
+    "c++": "C++",
+    "cpp": "C++",
+    "python": "Python",
+    "java": "Java",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "go": "Go",
+    "rust": "Rust",
+    "c#": "C#",
+    "csharp": "C#",
+    "kotlin": "Kotlin",
+    "swift": "Swift",
+}
+STRICT_LANGUAGE_EXTENSIONS = {
+    "C++": {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp", ".tpp"},
+    "Python": {".py"},
+    "Java": {".java"},
+    "JavaScript": {".js", ".jsx"},
+    "TypeScript": {".ts", ".tsx"},
+    "Go": {".go"},
+    "Rust": {".rs"},
+    "C#": {".cs"},
+    "Kotlin": {".kt", ".kts"},
+    "Swift": {".swift"},
+}
 CODE_EXTENSIONS = {
     ".py",
     ".js",
@@ -47,7 +73,12 @@ CODE_EXTENSIONS = {
     ".cpp",
     ".cxx",
     ".h",
+    ".hh",
     ".hpp",
+    ".hxx",
+    ".ipp",
+    ".inl",
+    ".tpp",
     ".cs",
     ".rb",
     ".php",
@@ -107,27 +138,57 @@ def parse_args() -> argparse.Namespace:
         default=",".join(DEFAULT_LANGUAGES),
         help="Comma-separated languages to search on GitHub.",
     )
-    parser.add_argument("--repo-limit", type=int, default=6, help="Maximum number of repositories to keep.")
-    parser.add_argument("--per-language-limit", type=int, default=2, help="Maximum number of repositories per language.")
-    parser.add_argument("--min-stars", type=int, default=50000, help="Minimum star threshold in GitHub Search.")
+    parser.add_argument("--repo-limit", type=int, default=18, help="Maximum number of repositories to keep.")
+    parser.add_argument("--per-language-limit", type=int, default=6, help="Maximum number of repositories per language.")
+    parser.add_argument("--min-stars", type=int, default=10000, help="Minimum star threshold in GitHub Search.")
     parser.add_argument("--max-repo-size-kb", type=int, default=80000, help="Maximum repo size accepted from search.")
     parser.add_argument(
         "--license-allowlist",
         default=",".join(DEFAULT_LICENSES),
         help="Comma-separated SPDX licenses to allow. Empty means no license filtering.",
     )
-    parser.add_argument("--max-files-per-repo", type=int, default=80, help="Maximum extracted files per repository.")
+    parser.add_argument("--max-files-per-repo", type=int, default=40, help="Maximum extracted files per repository.")
     parser.add_argument("--min-code-files-per-repo", type=int, default=10, help="Minimum extracted files required.")
     parser.add_argument("--max-bytes-per-file", type=int, default=16000, help="Skip files larger than this many bytes.")
     parser.add_argument("--max-bytes-per-repo", type=int, default=200000, help="Maximum bytes contributed by one repo.")
-    parser.add_argument("--max-total-files", type=int, default=300, help="Maximum extracted files overall.")
-    parser.add_argument("--max-total-bytes", type=int, default=1000000, help="Maximum total corpus size in bytes.")
+    parser.add_argument("--max-total-files", type=int, default=480, help="Maximum extracted files overall.")
+    parser.add_argument("--max-total-bytes", type=int, default=1800000, help="Maximum total corpus size in bytes.")
     parser.add_argument("--clone-depth", type=int, default=1, help="Git clone depth.")
+    parser.add_argument(
+        "--strict-language-files",
+        action="store_true",
+        help="Only keep source files that match the selected languages.",
+    )
     return parser.parse_args()
 
 
 def split_csv(value: str) -> List[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def normalize_languages(languages: List[str]) -> List[str]:
+    normalized = []
+    seen = set()
+    for language in languages:
+        key = language.strip()
+        if not key:
+            continue
+        normalized_language = LANGUAGE_ALIASES.get(key.lower(), key)
+        if normalized_language in seen:
+            continue
+        seen.add(normalized_language)
+        normalized.append(normalized_language)
+    return normalized
+
+
+def build_allowed_extensions(languages: List[str], strict_language_files: bool) -> set[str] | None:
+    if not strict_language_files:
+        return None
+
+    allowed_extensions = set()
+    for language in languages:
+        allowed_extensions.update(STRICT_LANGUAGE_EXTENSIONS.get(language, set()))
+    return allowed_extensions
 
 
 def github_api_get_json(url: str, token: str | None) -> Dict:
@@ -191,13 +252,18 @@ def is_probably_binary(path: Path) -> bool:
     return b"\x00" in chunk
 
 
-def should_keep_file(path: Path, max_bytes_per_file: int) -> bool:
+def should_keep_file(path: Path, max_bytes_per_file: int, allowed_extensions: set[str] | None) -> bool:
     if path.name.startswith("."):
         return False
     if path.name.endswith(".min.js"):
         return False
-    if path.suffix.lower() not in CODE_EXTENSIONS and path.name not in CODE_FILENAMES:
-        return False
+    normalized_suffix = path.suffix.lower()
+    if allowed_extensions is None:
+        if normalized_suffix not in CODE_EXTENSIONS and path.name not in CODE_FILENAMES:
+            return False
+    else:
+        if normalized_suffix not in allowed_extensions:
+            return False
     try:
         size = path.stat().st_size
     except OSError:
@@ -209,13 +275,13 @@ def should_keep_file(path: Path, max_bytes_per_file: int) -> bool:
     return True
 
 
-def iter_code_files(repo_dir: Path, max_bytes_per_file: int) -> Iterable[Path]:
+def iter_code_files(repo_dir: Path, max_bytes_per_file: int, allowed_extensions: set[str] | None) -> Iterable[Path]:
     for root, dirs, files in os.walk(repo_dir):
         dirs[:] = [directory for directory in dirs if directory not in EXCLUDED_DIRS and not directory.startswith(".")]
         root_path = Path(root)
         for filename in sorted(files):
             path = root_path / filename
-            if should_keep_file(path, max_bytes_per_file=max_bytes_per_file):
+            if should_keep_file(path, max_bytes_per_file=max_bytes_per_file, allowed_extensions=allowed_extensions):
                 yield path
 
 
@@ -252,13 +318,18 @@ def extract_repository_corpus(
     max_bytes_per_repo: int,
     remaining_files: int,
     remaining_bytes: int,
+    allowed_extensions: set[str] | None,
 ) -> Dict:
     kept_files: List[Dict[str, str | int]] = []
     repo_bytes = 0
     repo_path = repo_output_dir / f"{slugify_repo_name(repo['full_name'])}.txt"
 
     with repo_path.open("w", encoding="utf-8") as handle:
-        for path in iter_code_files(repo_dir, max_bytes_per_file=max_bytes_per_file):
+        for path in iter_code_files(
+            repo_dir,
+            max_bytes_per_file=max_bytes_per_file,
+            allowed_extensions=allowed_extensions,
+        ):
             if len(kept_files) >= max_files_per_repo or len(kept_files) >= remaining_files:
                 break
             if repo_bytes >= max_bytes_per_repo or repo_bytes >= remaining_bytes:
@@ -317,8 +388,9 @@ def main() -> None:
     repos_output_dir = output_dir / "repos"
     repos_output_dir.mkdir(parents=True, exist_ok=True)
 
-    languages = split_csv(args.languages)
+    languages = normalize_languages(split_csv(args.languages))
     allow_licenses = set(split_csv(args.license_allowlist))
+    allowed_extensions = build_allowed_extensions(languages, strict_language_files=args.strict_language_files)
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 
     selected_repos = []
@@ -375,6 +447,7 @@ def main() -> None:
                         max_bytes_per_repo=args.max_bytes_per_repo,
                         remaining_files=remaining_total_files,
                         remaining_bytes=remaining_total_bytes,
+                        allowed_extensions=allowed_extensions,
                     )
                 except (subprocess.CalledProcessError, OSError, urllib.error.URLError) as error:
                     rejected_repos.append({"full_name": repo["full_name"], "reason": f"clone-or-read-error:{error}"})
@@ -418,6 +491,7 @@ def main() -> None:
         "repo_limit": args.repo_limit,
         "per_language_limit": args.per_language_limit,
         "min_stars": args.min_stars,
+        "strict_language_files": args.strict_language_files,
         "selected_repo_count": len(selected_repos),
         "rejected_repo_count": len(rejected_repos),
         "dataset_path": str(dataset_path),

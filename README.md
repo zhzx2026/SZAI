@@ -2,6 +2,8 @@
 
 这是一个可以直接放到 GitHub 上运行的轻量训练项目，用 GitHub Actions 训练一个字符级中文语言模型 `SZ-AI-R1/V1`。
 
+如果你想先看整个项目现在的完整实现逻辑，可以直接看 `docs/AI_LOGIC.md`。
+
 这个方案的目标不是在 GitHub Hosted Runner 上硬跑大模型，而是先把以下几件事打通：
 
 - 有一条能复现的训练流水线
@@ -112,13 +114,24 @@ KMP_DUPLICATE_LIB_OK=TRUE OMP_NUM_THREADS=1 python3 scripts/generate.py --checkp
 
 默认参数偏保守：
 
-- 语言：`Python,TypeScript,JavaScript,Go,Rust`
-- 总仓库数：`6`
-- 每种语言最多：`2`
-- 最低 star：`50000`
+- 语言：`C++,Python,Java`
+- 总仓库数：`18`
+- 每种语言最多：`6`
+- 最低 star：`10000`
+- 总文件上限：`480`
+- 总语料字节上限：`1800000`
 - 许可证白名单：`MIT, Apache-2.0, BSD-3-Clause, BSD-2-Clause, ISC, MPL-2.0`
+- 严格语言文件过滤：只保留 `C++ / Python / Java` 对应源码文件
 
 这样做不是因为技术上不能更多，而是因为免费 Action 的 CPU、磁盘、时长都有限。先做小而稳，才有可重复性。
+
+如果你关心“训练器是不是要改成 C++ 才更快”，当前答案是不值得。对免费 GitHub Hosted Runner 来说，真正的瓶颈是：
+
+- CPU 算力
+- 模型结构
+- 训练数据规模
+
+所以当前更有效的优化方向不是把训练脚本重写成 C++，而是把训练语料收窄到你真正关心的语言，并把 repo 量和语料上限调到更合理的范围。现在默认就是按这个思路配的。
 
 如果你要手动运行这个代码助手训练：
 
@@ -152,10 +165,13 @@ python3 -m pip install -r requirements.txt
 
 然后双击仓库根目录里的 `SZ-AI-Mac.command`，会打开一个图形界面。你可以：
 
+- 先点击 `Browse` 选择一个已经训练好的 `model.pt`
 - 选择 `model.pt`
 - 填 prompt
 - 调整 `max_new_tokens`、`temperature`、`top_k`
 - 点击 `Generate`
+
+这个应用本身不内置模型权重，它只是一个本地测试器，所以必须先准备好训练产物里的 `model.pt`。
 
 ### 打包成真正的 `.app`
 

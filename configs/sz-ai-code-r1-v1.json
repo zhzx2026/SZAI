@@ -16,13 +16,13 @@
   },
   "training": {
     "batch_size": 16,
-    "epochs": 2,
+    "epochs": 4,
     "learning_rate": 0.001,
     "weight_decay": 0.01,
     "grad_clip": 1.0
   },
   "generation": {
-    "sample_prompt": "def solve(",
+    "sample_prompt": "class Solution {",
     "temperature": 0.8,
     "top_k": 24,
     "max_new_tokens": 240

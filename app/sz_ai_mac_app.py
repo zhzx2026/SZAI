@@ -151,9 +151,16 @@ class SZAIApp:
             return
 
         try:
-            checkpoint_path = Path(self.checkpoint_var.get().strip()).expanduser().resolve()
+            raw_checkpoint = self.checkpoint_var.get().strip()
+            if not raw_checkpoint:
+                raise ValueError("Please choose a model.pt checkpoint first.")
+            checkpoint_path = Path(raw_checkpoint).expanduser().resolve()
             if not checkpoint_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+            if not checkpoint_path.is_file():
+                raise ValueError(f"Checkpoint must be a file, not a directory: {checkpoint_path}")
+            if checkpoint_path.suffix != ".pt":
+                raise ValueError(f"Checkpoint should usually be a .pt file: {checkpoint_path.name}")
             max_new_tokens = int(self.max_new_tokens_var.get().strip())
             temperature = float(self.temperature_var.get().strip())
             top_k = int(self.top_k_var.get().strip())
